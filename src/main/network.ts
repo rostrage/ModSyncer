@@ -8,10 +8,9 @@ import WebTorrent from 'webtorrent';
 
 const client = new WebTorrent();
 const dht = new DHT();
-dht.listen(20000, () => {
+dht.listen(() => {
   console.log(`dht now listening`);
 });
-
 async function parseModList(filePath) {
 	const file = await fs.readFile(filePath, 'utf-8');
 	return file.split('\r\n').filter((filename) => {return filename[0]==='+'}).map((filename) => {return filename.substring(1)}).reverse();
