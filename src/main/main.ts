@@ -36,8 +36,12 @@ ipcMain.on('select-file', async (event, arg) => {
 });
 
 ipcMain.on('share', async (event, arg) => {
-  const success = await network.shareModList(arg);
-  event.reply('share',success.toString('hex'))
+  try{
+    const success = await network.shareModList(arg);
+    event.reply('share',success.toString('hex'))
+  } catch (e) {
+    event.reply('share', null);
+  }
 });
 
 //arg is [modListPath,infoHash]

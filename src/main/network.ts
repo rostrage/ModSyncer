@@ -28,8 +28,12 @@ dht.on('warning', function (err) {
 	console.log(err);
 })
 async function parseModList(filePath) {
-	const file = await fs.readFile(filePath, 'utf-8');
-	return file.split('\r\n').filter((filename) => {return filename[0]==='+'}).map((filename) => {return filename.substring(1)}).reverse();
+	try {
+		const file = await fs.readFile(filePath, 'utf-8');
+		return file.split('\r\n').filter((filename) => {return filename[0]==='+'}).map((filename) => {return filename.substring(1)}).reverse();		
+	} catch(e){
+		throw 'Could not parse mod list';
+	}
 }
 
 async function walkDirectory(directoryPath) {
@@ -65,37 +69,41 @@ async function walkModList(modList,modsPath) {
 }
 
 async function getFilesToShare(filePath) {
-	const modList = await parseModList(filePath);
-	const modsPath = path.join(filePath,'../../../mods');
-	const allFiles = await walkModList(modList,modsPath);
-	let relativeToFullPath = {};
-	let hashToPath = {};
-	for(let i=0;i<allFiles.length;i++) {
-		const files = allFiles[i];
-		const modName = modList[i];
-		for(let file of files) {
-			let relativePath = path.relative(modsPath,file).substring(modName.length+1); //+1 to also chop off the /
-			relativeToFullPath[relativePath] = file;
-		}
-	}
-	for(let file in relativeToFullPath) {
-		try {
-			const fullPath = relativeToFullPath[file];
-			const hash = crypto.createHash('sha256');
-			const input = await fs.readFile(fullPath);
-			hash.update(input);
-			let computedHash = hash.digest('hex');
-			relativeToFullPath.hash = computedHash;
-			if(!hashToPath[computedHash]){
-				hashToPath[computedHash] = [fullPath];
-			} else {
-				hashToPath[computedHash].push(fullPath);
+	try{	
+		const modList = await parseModList(filePath);
+		const modsPath = path.join(filePath,'../../../mods');
+		const allFiles = await walkModList(modList,modsPath);
+		let relativeToFullPath = {};
+		let hashToPath = {};
+		for(let i=0;i<allFiles.length;i++) {
+			const files = allFiles[i];
+			const modName = modList[i];
+			for(let file of files) {
+				let relativePath = path.relative(modsPath,file).substring(modName.length+1); //+1 to also chop off the /
+				relativeToFullPath[relativePath] = file;
 			}
-		} catch(e){
-			console.log(e);
 		}
+		for(let file in relativeToFullPath) {
+			try {
+				const fullPath = relativeToFullPath[file];
+				const hash = crypto.createHash('sha256');
+				const input = await fs.readFile(fullPath);
+				hash.update(input);
+				let computedHash = hash.digest('hex');
+				relativeToFullPath.hash = computedHash;
+				if(!hashToPath[computedHash]){
+					hashToPath[computedHash] = [fullPath];
+				} else {
+					hashToPath[computedHash].push(fullPath);
+				}
+			} catch(e){
+				console.log(e);
+			}
+		}
+		return hashToPath;
+	} catch (e) {
+		throw e;
 	}
-	return hashToPath;
 }
 
 async function seedFile(filePath) {
@@ -109,39 +117,43 @@ async function seedFile(filePath) {
 
 async function shareModList(filePath) {
 	return new Promise(async function(resolve,reject) {
-		const hashedMappedFiles = await getFilesToShare(filePath);
-		const modsPath = path.join(filePath,'../../../mods');
-		console.log("mapped files");
-		let infoHashMappedFiles = {};
-		for(const hash in hashedMappedFiles) {
-			const torrent = await seedFile(hashedMappedFiles[hash][0],client);
-			const relativePaths = hashedMappedFiles[hash].map((fullPath) => path.relative(modsPath,fullPath));
-			infoHashMappedFiles[torrent.magnetURI] = relativePaths;
-		}
-		console.log("generated torrents");
-		const serialized = JSON.stringify(infoHashMappedFiles);
-		//anything over 1000 bytes cannot be stored directly on the DHT
-		//make a new torrent and store infohash to that instead
-		const keypair = ed.keygen();
-		const infoBuffer = Buffer.from(serialized);
-		infoBuffer.name = 'info.json'
-		const infoTorrent = await seedFile(infoBuffer,client);
-		console.log(infoTorrent.magnetURI);
-		const value = Buffer.from(infoTorrent.magnetURI);
-		const opts = {
-			k: keypair.pk,
-			seq: 0,
-			v: value,
-			sign: (buf) => {
-				return ed.sign(buf,keypair.sk);
+		try {		
+			const hashedMappedFiles = await getFilesToShare(filePath);
+			const modsPath = path.join(filePath,'../../../mods');
+			console.log("mapped files");
+			let infoHashMappedFiles = {};
+			for(const hash in hashedMappedFiles) {
+				const torrent = await seedFile(hashedMappedFiles[hash][0],client);
+				const relativePaths = hashedMappedFiles[hash].map((fullPath) => path.relative(modsPath,fullPath));
+				infoHashMappedFiles[torrent.magnetURI] = relativePaths;
 			}
-		};
-		console.log("generating infodata on dht");
-		dht.put(opts, function(err,hash) {
-			console.log(err);
-			console.log('done');
-			resolve(hash);
-		});
+			console.log("generated torrents");
+			const serialized = JSON.stringify(infoHashMappedFiles);
+			//anything over 1000 bytes cannot be stored directly on the DHT
+			//make a new torrent and store infohash to that instead
+			const keypair = ed.keygen();
+			const infoBuffer = Buffer.from(serialized);
+			infoBuffer.name = 'info.json'
+			const infoTorrent = await seedFile(infoBuffer,client);
+			console.log(infoTorrent.magnetURI);
+			const value = Buffer.from(infoTorrent.magnetURI);
+			const opts = {
+				k: keypair.pk,
+				seq: 0,
+				v: value,
+				sign: (buf) => {
+					return ed.sign(buf,keypair.sk);
+				}
+			};
+			console.log("generating infodata on dht");
+			dht.put(opts, function(err,hash) {
+				console.log(err);
+				console.log('done');
+				resolve(hash);
+			});
+		} catch(e) {
+			reject(e);
+		}
 	});
 }
 

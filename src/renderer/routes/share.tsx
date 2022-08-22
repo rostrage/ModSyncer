@@ -7,8 +7,12 @@ export default function Share() {
 	const [infoHash, setInfoHash] = useState(0);
 	window.electron.ipcRenderer.once('select-file', (filePath) => setPath(filePath));		
 	window.electron.ipcRenderer.once('share', (result) => {
-		setInfoHash(result);
-		setLoading(2);
+		if(result) {		
+			setInfoHash(result);
+			setLoading(2);
+		} else {
+			setLoading(0);
+		}
 	});
 	const setPath = function setPath(newPath) {
 		setModListPath(newPath);
@@ -30,6 +34,7 @@ export default function Share() {
 	            {modListPath}
 				<button type="button" onClick={selectFile}>Browse</button>
 	            <br/>
+				<button type="button"><Link key="main" to="/">Back</Link></button>
 		        <button type="submit" onClick={shareModList}>Submit</button>
 		    </div>
 		);

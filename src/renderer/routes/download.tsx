@@ -26,6 +26,7 @@ export default function Download() {
             <label htmlFor="infoHash">Please enter the share infohash.</label>
             <input type="text" id="infoHash" value={infoHash} onChange={handleChange}/>
             <br/>
+			<button type="button"><Link key="main" to="/">Back</Link></button>
 	        <button type="submit" onClick={downloadModList}>Submit</button>
 	    </div>
 	);
