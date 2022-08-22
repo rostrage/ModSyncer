@@ -173,7 +173,7 @@ async function getModListTorrent(infoHash){
 
 async function getModList(infoHash){
 	return new Promise(async function(resolve,reject){
-			client.add(infoHash, (torrent) => {
+			client.add(infoHash.toString(), (torrent) => {
 				torrent.on('done', () => {
 					let file = torrent.files?.[0];
 					if(file===undefined){
@@ -193,7 +193,7 @@ async function getModList(infoHash){
 }
 
 async function getMod(infoHash,path){
-		client.add(infoHash, {
+		client.add(infoHash.toString(), {
 			'path':path
 		}, (torrent) => {
 			console.log(torrent);
