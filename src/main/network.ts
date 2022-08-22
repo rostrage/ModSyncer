@@ -98,9 +98,10 @@ async function shareModList(filePath) {
 		const modsPath = path.join(filePath,'../../../mods');
 		console.log("mapped files");
 		let infoHashMappedFiles = {};
-		for(let hash in hashedMappedFiles) {
-			let torrent = await seedFile(hashedMappedFiles[hash],client);
-			infoHashMappedFiles[torrent.infoHash] = path.relative(modsPath,hashedMappedFiles[hash]);
+		for(const hash in hashedMappedFiles) {
+			const torrent = await seedFile(hashedMappedFiles[hash][0],client);
+			const relativePaths = hashedMappedFiles[hash].map((fullPath) => path.relative(modsPath,fullPath));
+			infoHashMappedFiles[torrent.infoHash] = relativePaths;
 		}
 		console.log("generated torrents");
 		const serialized = JSON.stringify(infoHashMappedFiles);
@@ -119,6 +120,7 @@ async function shareModList(filePath) {
 		};
 		console.log("generating infodata on dht");
 		dht.put(opts, function(err,hash) {
+			console.log(err);
 			console.log('done');
 			resolve(hash);
 		});
@@ -141,7 +143,7 @@ async function getModListTorrent(infoHash){
 
 async function getModList(infoHash){
 	return new Promise(async function(resolve,reject){
-			client.add(infoHash, (torrent) => {
+			client.add(Buffer.from(infoHash,'hex'), (torrent) => {
 				torrent.on('done', () => {
 					let file = torrent.files?.[0];
 					if(file===undefined){
@@ -169,8 +171,6 @@ async function getMod(infoHash,path){
 }
 
 async function downloadModList(filePath,infoHash) {
-	console.log(filePath);
-	console.log(infoHash);
 	return new Promise(async function(resolve,reject){
 			try {
 				const modListTorrent = await getModListTorrent(infoHash,dht);
