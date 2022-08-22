@@ -119,9 +119,9 @@ async function getFilesToShare(filePath) {
 	}
 }
 
-async function seedFile(filePath) {
+async function seedFile(file) {
 	let result = new Promise((resolve,reject) =>{	
-		client.seed(filePath, function(torrent) {
+		client.seed(file, function(torrent) {
 			resolve(torrent);
 		});
 	});
@@ -136,7 +136,9 @@ async function shareModList(filePath) {
 			console.log("mapped files");
 			let infoHashMappedFiles = {};
 			for(const hash in hashedMappedFiles) {
-				const torrent = await seedFile(hashedMappedFiles[hash][0],client);
+				const buffer = await fs.readFile(hashedMappedFiles[hash][0]);
+				buffer.name = path.basename(hashedMappedFiles[hash][0])
+				const torrent = await seedFile(buffer);
 				const relativePaths = hashedMappedFiles[hash].map((fullPath) => path.relative(modsPath,fullPath));
 				infoHashMappedFiles[torrent.magnetURI] = relativePaths;
 			}
@@ -207,11 +209,20 @@ async function getModList(infoHash){
 	});
 }
 
-async function getMod(infoHash,path){
-		console.log(`getting mod ${infoHash} ${path}`);
-		client.add(infoHash, {
-			'path':path
-		}, (torrent) => {
+async function getMod(infoHash,filePath){
+		console.log(`getting mod ${infoHash} ${filePath}`);
+		client.add(infoHash, (torrent) => {
+			torrent.on('done', () => {
+				let file = torrent.files?.[0];
+				if(file===undefined) {
+					console.log('empty torrent');
+				} else {
+					console.log(file);
+					file.getBuffer((err,buff) => {
+						fs.writeFile(filePath,buff);
+					})
+				}
+			})
 			console.log(torrent);
 		});
 }
