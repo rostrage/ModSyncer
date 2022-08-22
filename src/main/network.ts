@@ -7,10 +7,26 @@ import WebTorrent from 'webtorrent';
 
 
 const client = new WebTorrent();
-const dht = new DHT({ verify: ed.verify });
+client.on('error', function (err) {
+	console.log(err);
+	console.log('error with torrent');
+})
+const dht = new DHT({
+  'verify': ed.verify,
+});
 dht.listen(() => {
+	//add ourself in case we aren't currently connected to any other nodes.
+  dht.addNode({ host: '127.0.0.1', port: dht.address().port })
   console.log(`dht now listening`);
 });
+dht.on('node', (node) =>{
+	console.log('new node');
+	console.log(node);
+})
+dht.on('warning', function (err) {
+	console.log('dht error');
+	console.log(err);
+})
 async function parseModList(filePath) {
 	const file = await fs.readFile(filePath, 'utf-8');
 	return file.split('\r\n').filter((filename) => {return filename[0]==='+'}).map((filename) => {return filename.substring(1)}).reverse();
@@ -100,15 +116,18 @@ async function shareModList(filePath) {
 		for(const hash in hashedMappedFiles) {
 			const torrent = await seedFile(hashedMappedFiles[hash][0],client);
 			const relativePaths = hashedMappedFiles[hash].map((fullPath) => path.relative(modsPath,fullPath));
-			infoHashMappedFiles[torrent.infoHash] = relativePaths;
+			infoHashMappedFiles[torrent.magnetURI] = relativePaths;
 		}
 		console.log("generated torrents");
 		const serialized = JSON.stringify(infoHashMappedFiles);
 		//anything over 1000 bytes cannot be stored directly on the DHT
 		//make a new torrent and store infohash to that instead
 		const keypair = ed.keygen();
-		const infoTorrent = await seedFile(Buffer.from(serialized),client);
-		const value = Buffer.from(infoTorrent.infoHash);
+		const infoBuffer = Buffer.from(serialized);
+		infoBuffer.name = 'info.json'
+		const infoTorrent = await seedFile(infoBuffer,client);
+		console.log(infoTorrent.magnetURI);
+		const value = Buffer.from(infoTorrent.magnetURI);
 		const opts = {
 			k: keypair.pk,
 			seq: 0,
@@ -142,7 +161,7 @@ async function getModListTorrent(infoHash){
 
 async function getModList(infoHash){
 	return new Promise(async function(resolve,reject){
-			client.add(Buffer.from(infoHash,'hex'), (torrent) => {
+			client.add(infoHash, (torrent) => {
 				torrent.on('done', () => {
 					let file = torrent.files?.[0];
 					if(file===undefined){
@@ -172,8 +191,10 @@ async function getMod(infoHash,path){
 async function downloadModList(filePath,infoHash) {
 	return new Promise(async function(resolve,reject){
 			try {
-				const modListTorrent = await getModListTorrent(infoHash,dht);
-				let modList = getModList(modListTorrent,client);
+				const modListTorrent = await getModListTorrent(infoHash);
+				console.log(`got mod list torrent infoHash ${modListTorrent}`);
+				let modList = await getModList(modListTorrent);
+				console.log(`got mod list ${modList}`);
 				const existingFiles = await getFilesToShare(filePath);
 				const modsPath = path.join(filePath,'../../../mods');
 
