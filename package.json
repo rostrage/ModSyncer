@@ -109,15 +109,13 @@
   },
   "dependencies": {
     "bittorrent-dht": "^10.0.4",
-    "bittorrent-dht-sodium": "^1.2.0",
     "electron-debug": "^3.2.0",
     "electron-log": "^4.4.8",
     "electron-updater": "^5.2.1",
     "ini": "^3.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.3.0",
-    "webtorrent": "^1.8.26"
+    "react-router-dom": "^6.3.0"
   },
   "devDependencies": {
     "@pmmmwh/react-refresh-webpack-plugin": "^0.5.7",
