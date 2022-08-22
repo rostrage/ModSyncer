@@ -7,7 +7,7 @@ import WebTorrent from 'webtorrent';
 
 
 const client = new WebTorrent();
-const dht = new DHT();
+const dht = new DHT({ verify: ed.verify });
 dht.listen(() => {
   console.log(`dht now listening`);
 });
