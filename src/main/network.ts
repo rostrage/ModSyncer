@@ -12,9 +12,12 @@ client.on('error', function (err) {
 	console.log('error with torrent');
 })
 const dht = new DHT({
+	'bootstrap' : [
+	'192.168.1.251:6881'
+	],
   'verify': ed.verify,
 });
-dht.listen(() => {
+dht.listen(6881,() => {
 	//add ourself in case we aren't currently connected to any other nodes.
   dht.addNode({ host: '127.0.0.1', port: dht.address().port })
   console.log(`dht now listening`);
@@ -23,9 +26,19 @@ dht.on('node', (node) =>{
 	console.log('new node');
 	console.log(node);
 })
+dht.on('peer', (peer,infoHash,from) => {
+	console.log('new peer');
+})
 dht.on('warning', function (err) {
+	console.log('dht warning');
+	console.log(err);
+})
+dht.on('error', function (err) {
 	console.log('dht error');
 	console.log(err);
+})
+dht.on('ready', function () {
+	console.log('dht ready');
 })
 async function parseModList(filePath) {
 	try {
@@ -160,6 +173,7 @@ async function shareModList(filePath) {
 
 async function getModListTorrent(infoHash){
 	return new Promise(async function(resolve,reject){
+		dht.lookup(infoHash, () =>{
 			dht.get(infoHash, function(err,res){
 				console.log(err);
 				if(res===null){
@@ -167,7 +181,8 @@ async function getModListTorrent(infoHash){
 				} else {
 					resolve(res.v);
 				}
-			})
+			})			
+		})
 	});
 }
 
@@ -193,7 +208,8 @@ async function getModList(infoHash){
 }
 
 async function getMod(infoHash,path){
-		client.add(infoHash.toString(), {
+		console.log(`getting mod ${infoHash} ${path}`);
+		client.add(infoHash, {
 			'path':path
 		}, (torrent) => {
 			console.log(torrent);
@@ -201,26 +217,28 @@ async function getMod(infoHash,path){
 }
 
 async function downloadModList(filePath,infoHash) {
+	console.log(dht.toJSON());
 	return new Promise(async function(resolve,reject){
 			try {
 				const modListTorrent = await getModListTorrent(infoHash);
 				console.log(`got mod list torrent infoHash ${modListTorrent}`);
 				let modList = await getModList(modListTorrent);
-				console.log(`got mod list ${modList}`);
 				const existingFiles = await getFilesToShare(filePath);
 				const modsPath = path.join(filePath,'../../../mods');
 
 				for(let mod in modList) {
-					const targetLocation = path.join(modsPath,modList[mod]);
+					console.log(`download mod ${mod}`);
+					const targetLocation = path.join(modsPath,modList[mod][0]);
 					//don't download stuff we already have
 					if(existingFiles[mod]!==undefined){
 						await fs.copyFile(existingFiles[mod],targetLocation);
 					} else {					
-						getMod(modList[mod],targetLocation,client);
+						getMod(mod,targetLocation,client);
 					}
 				}
 				resolve(true);
 			} catch(e){
+				console.log(e);
 				reject(e);
 			}
 	});
